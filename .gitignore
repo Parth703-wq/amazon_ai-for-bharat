@@ -1,0 +1,7 @@
+# JanSahayak AI — .gitignore (root)
+# Seed data and translation scripts
+seed_schemes.py
+
+# OS
+.DS_Store
+Thumbs.db
