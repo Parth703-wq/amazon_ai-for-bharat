@@ -172,7 +172,7 @@ Response delivered via WhatsApp / IVR
 
 ## Hackathon Submission
 
-- **Event**: Amazon AI for Bharat Hackathon 2025
+- **Event**: Amazon AI for Bharat Hackathon 
 - **Problem Statement**: PS03 — AI for Communities, Access & Public Impact
 - **Team Name**: HackOps7
 - **Team Leader**: Parth Hindiya
