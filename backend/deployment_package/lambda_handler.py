@@ -1,16 +1,24 @@
 """
-lambda_handler.py
-=================
-AWS Lambda entry point for JanSahayak AI FastAPI backend.
-Uses Mangum to wrap the FastAPI ASGI app for Lambda + API Gateway.
-
-This file is the Handler that AWS Lambda calls.
-Set Handler to: lambda_handler.handler  in Lambda Console.
+lambda_handler.py — AWS Lambda entry point for JanSahayak AI FastAPI backend.
+Handler: lambda_handler.handler
 """
+import json
+import logging
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 from main import app
 from mangum import Mangum
 
-# lifespan="off" — Lambda is stateless; we don't run startup/shutdown events
-# APScheduler (SNS alerts) does not run in Lambda — use EventBridge instead for production
-handler = Mangum(app, lifespan="off")
+_mangum_handler = Mangum(app, lifespan="off")
+
+
+def handler(event, context):
+    # Debug log — shows rawPath coming from API Gateway
+    path = event.get("rawPath", event.get("path", "UNKNOWN"))
+    method = event.get("requestContext", {}).get("http", {}).get("method", "?")
+    logger.info(f"REQUEST: {method} {path}")
+    logger.info(f"EVENT_KEYS: {list(event.keys())}")
+    return _mangum_handler(event, context)
+
