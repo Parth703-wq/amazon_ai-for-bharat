@@ -5,6 +5,18 @@
 
 ---
 
+## Live Demo & Access (Sandbox)
+
+- **WhatsApp AI Assistant**:
+  1. Save the number: **+1 415 523 8886**
+  2. Send the message: **join well-bell**
+  3. Start chatting in Hindi, English, or any regional language!
+
+- **Web Application Portal**:
+  [https://main.d1u4xqrv56gw9p.amplifyapp.com](https://main.d1u4xqrv56gw9p.amplifyapp.com)
+
+---
+
 ## The Problem
 
 Over **500 million rural Indians** are eligible for government welfare schemes like PM Kisan, Ayushman Bharat, Fasal Bima Yojana, MNREGA, and PM Awas Yojana — yet most never claim them.
@@ -67,42 +79,25 @@ Over **500 million rural Indians** are eligible for government welfare schemes l
 - Tailwind CSS — dashboard styling
 
 ### Backend / Server
-- AWS Lambda — serverless logic and request routing
+- AWS Lambda — serverless logic and request routing (Python 3.12)
 - Amazon API Gateway — unified API entry point
-- Node.js — Lambda runtime
-- Python — ML processing scripts
+- Amazon RDS (MySQL) — persistent storage for schemes and office locations
 
 ### AI / ML Layer
-- Amazon Bedrock (Claude 3 Sonnet) — core LLM, intent detection, response generation
+- Anthropic Claude 3 Haiku (via API) — Conversational engine for WhatsApp
+- Google Gemini 1.5/2.0 — advanced logic, document analysis & scheme matching
 - Amazon Transcribe — speech-to-text in 12+ Indian languages
 - Amazon Polly — text-to-speech in regional languages
 - Amazon Translate — 22 Indian language translation pipeline
-- Amazon Kendra — intelligent scheme document search
-- Amazon Textract — reads and extracts text from government letter photos
 
 ### Database / Storage
-- Amazon DynamoDB — user profiles, scheme database, session state
-- Amazon S3 — scheme documents and knowledge base
-- Amazon ElastiCache — response caching for fast replies
+- Amazon RDS / Aurora — scheme database, user profiles & session state
+- Amazon S3 — scheme documents and knowledge base / deployment artifacts
 
 ### Infrastructure
-- AWS CloudFormation — infrastructure as code
+- AWS Amplify — Frontend hosting & CI/CD
+- GitHub / AWS S3 — Code versioning and artifact management
 - Amazon CloudWatch — monitoring and logging
-- AWS IAM — security and access management
-- Amazon QuickSight — analytics dashboard for government partners
-- Amazon EventBridge — scheduled deadline alert triggers
-
-### External APIs
-- DigiLocker API — digital document verification
-- Aadhaar Verify API (UIDAI) — identity verification
-- OLA Maps API — nearest government office locator
-- WhatsApp Cloud API (Meta) — message delivery and webhooks
-
-### Security and Compliance
-- AWS KMS — encryption key management
-- Amazon Cognito — admin authentication
-- SSL / TLS — end-to-end encryption
-- DPDP Act 2023 compliant — India data privacy law
 
 ---
 
@@ -113,26 +108,25 @@ User (Voice / WhatsApp)
         ↓
 Amazon API Gateway
         ↓
-AWS Lambda (Request Router)
+AWS Lambda (Python Request Router)
         ↓
 ┌───────────────────────────────────────┐
 │           AI CORE                     │
-│  Transcribe → Translate → Bedrock     │
-│  (STT)        (Normalize)   (LLM)     │
+│  Claude 3 (Chat) / Gemini (Logic)     │
+│  (NLP)           (Document/Match)     │
 │                    ↓                  │
-│           Amazon Polly (TTS)          │
+│           Amazon Polly (TTS/Voice)    │
 └───────────────────────────────────────┘
         ↓
 ┌───────────────────────────────────────┐
 │        KNOWLEDGE LAYER                │
-│  Kendra (Scheme Search)               │
-│  DynamoDB (User Profile)              │
-│  S3 (Scheme Documents)                │
+│  RDS (Scheme/Office DB)               │
+│  S3 (Document Storage)                │
 └───────────────────────────────────────┘
         ↓
 ┌───────────────────────────────────────┐
 │        EXTERNAL INTEGRATIONS          │
-│  DigiLocker | Aadhaar | OLA Maps      │
+│  Twilio WhatsApp | RDS SQL            │
 └───────────────────────────────────────┘
         ↓
 Response delivered via WhatsApp / IVR
@@ -142,17 +136,17 @@ Response delivered via WhatsApp / IVR
 
 ## How It Works
 
-**Step 1** — User sends a WhatsApp voice note or calls the toll-free IVR number in their language
+**Step 1** — User sends a WhatsApp voice note (or text) or calls the IVR number in their language.
 
-**Step 2** — Amazon Transcribe converts speech to text in their regional language
+**Step 2** — Backend processes the request using Claude 3 Haiku for rapid conversational context.
 
-**Step 3** — Amazon Translate normalizes the text for processing
+**Step 3** — If location/schemes are requested, the system queries the live RDS database (optimized for Gujarat centers and Central schemes).
 
-**Step 4** — Amazon Bedrock (Claude 3 Sonnet) understands the intent and queries the scheme database via Kendra
+**Step 4** — AI Gemini performs intelligent matching if complex eligibility verification is needed.
 
-**Step 5** — Response is generated, translated back to user's language, and spoken aloud via Amazon Polly
+**Step 5** — Response is formatted with a signature link back to the live Web Portal.
 
-**Step 6** — User receives step-by-step guidance, scheme list, or document explanation instantly
+**Step 6** — User receives step-by-step guidance, scheme list, or document explanation instantly.
 
 ---
 
@@ -162,17 +156,16 @@ Response delivered via WhatsApp / IVR
 |---|---|
 | Target Users | 600 million+ rural Indians |
 | Indian Languages Supported | 22 |
-| Government Schemes Covered | 805+ central schemes |
+| Government Schemes Covered | 800+ central & state schemes |
 | Network Requirement | Works on 2G |
 | App Download Required | None |
 | Cost to Citizen | Free |
 
 ---
 
-
 ## Hackathon Submission
 
-- **Event**: Amazon AI for Bharat Hackathon 
+- **Event**: Amazon AI for Bharat Hackathon 2025
 - **Problem Statement**: PS03 — AI for Communities, Access & Public Impact
 - **Team Name**: HackOps7
 - **Team Leader**: Parth Hindiya
@@ -181,4 +174,4 @@ Response delivered via WhatsApp / IVR
 
 ## License
 
-This project was built for the Amazon AI for Bharat Hackathon 2025. All rights reserved by the team .
+This project was built for the Amazon AI for Bharat Hackathon 2025. All rights reserved by Team HackOps7.
