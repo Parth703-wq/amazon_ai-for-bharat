@@ -80,16 +80,39 @@ export const Hero = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 w-full relative z-10 translate-y-4">
-                                <div className="h-2 w-12 bg-gray-200 rounded-full mb-3" />
-                                <div className="h-4 w-3/4 bg-gray-200 rounded-full mb-2" />
-                                <div className="h-4 w-1/2 bg-gray-200 rounded-full" />
-                            </div>
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 w-full relative z-0 translate-y-0 opacity-80 scale-95 origin-bottom">
-                                <div className="h-2 w-12 bg-gray-200 rounded-full mb-3" />
-                                <div className="h-4 w-2/3 bg-gray-200 rounded-full mb-2" />
-                                <div className="h-4 w-1/3 bg-gray-200 rounded-full" />
-                            </div>
+                            {/* User message bubble */}
+                            <motion.div
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.6, duration: 0.4 }}
+                                className="bg-primary text-white rounded-2xl rounded-tr-sm shadow-md px-4 py-3 w-full relative z-10 mt-2"
+                            >
+                                <p className="text-xs font-semibold opacity-70 mb-1">You said</p>
+                                <p className="text-sm font-medium">"मुझे PM Kisan scheme मिलेगी क्या?"</p>
+                            </motion.div>
+
+                            {/* AI reply bubble */}
+                            <motion.div
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 1.0, duration: 0.4 }}
+                                className="bg-white border border-gray-100 rounded-2xl rounded-tl-sm shadow-md px-4 py-3 w-full relative z-0 mt-2"
+                            >
+                                <div className="flex items-center gap-2 mb-2">
+                                    <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center">
+                                        <span className="text-white text-[8px] font-bold">AI</span>
+                                    </div>
+                                    <p className="text-xs font-semibold text-primary">JanSahayak AI</p>
+                                </div>
+                                <p className="text-xs text-gray-700 leading-relaxed">
+                                    Haan! Aap eligible hain. PM Kisan se aapko <span className="font-bold text-green-600">Rs.6,000/year</span> milega. Apply karne ke liye Aadhaar aur bank passbook chahiye.
+                                </p>
+                                <div className="flex gap-2 mt-3">
+                                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">Apply Now</span>
+                                    <span className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Documents needed</span>
+                                </div>
+                            </motion.div>
+
 
                         </motion.div>
                     </div>

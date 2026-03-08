@@ -1,17 +1,45 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, Mic, MicOff, Loader2, X, Volume2, VolumeX,
+    Search, Mic, MicOff, X, Volume2, VolumeX,
+
     ExternalLink, MessageCircle, FileText, Bot, CheckCircle,
-    ChevronRight, Calendar, Building2, Users, IndianRupee
+    ChevronRight, Calendar, Building2, Users, IndianRupee,
+    Bookmark, BookmarkCheck, Share2, ArrowUp
 } from 'lucide-react';
 import { schemesApi, type SchemeResponse } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
+// ── Saved schemes (localStorage) ─────────────────────────────────────────────
+const SAVED_KEY = 'jansahayak_saved_schemes';
+function getSaved(): number[] {
+    try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch { return []; }
+}
+function toggleSaved(id: number): number[] {
+    const cur = getSaved();
+    const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+    localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+    return next;
+}
+
+// ── Deadline badge helper ─────────────────────────────────────────────────────
+function daysUntilDeadline(iso?: string): number | null {
+    if (!iso) return null;
+    const diff = new Date(iso).getTime() - Date.now();
+    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return days >= 0 && days <= 30 ? days : null;
+}
+
 declare global {
-    interface Window { SpeechRecognition: any; webkitSpeechRecognition: any; }
+    interface Window {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
+        SpeechRecognition: any;
+        webkitSpeechRecognition: any;
+        /* eslint-enable @typescript-eslint/no-explicit-any */
+    }
 }
 
 // ── Language config ─────────────────────────────────────────────────────────
@@ -91,6 +119,18 @@ function extractApplyUrl(authority?: string): string {
     return match ? match[0] : '';
 }
 
+// ── Skeleton Card ────────────────────────────────────────────────────────────
+const SchemeSkeletonCard = () => (
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
+        <div className="h-5 bg-gray-200 rounded w-1/3 mb-3" />
+        <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
+        <div className="h-4 bg-gray-200 rounded w-1/2 mb-4" />
+        <div className="h-3 bg-gray-100 rounded w-full mb-1" />
+        <div className="h-3 bg-gray-100 rounded w-5/6 mb-4" />
+        <div className="h-9 bg-gray-200 rounded-xl w-full" />
+    </div>
+);
+
 // ── Main Component ───────────────────────────────────────────────────────────
 export const SchemeFinder = () => {
     const { user } = useAuthStore();
@@ -107,16 +147,40 @@ export const SchemeFinder = () => {
     const [aiMsg, setAiMsg] = useState('');
     const [error, setError] = useState('');
     const [isListening, setIsListening] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [recognition, setRecognition] = useState<any>(null);
+
     const [selectedScheme, setSelectedScheme] = useState<SchemeResponse | null>(null);
     const [speaking, setSpeaking] = useState(false);
+    const [savedIds, setSavedIds] = useState<number[]>(getSaved);
+    const [showBackTop, setShowBackTop] = useState(false);
+    const [copied, setCopied] = useState(false);
+
+    // ── Back to top scroll watcher
+    useEffect(() => {
+        const onScroll = () => setShowBackTop(window.scrollY > 400);
+        window.addEventListener('scroll', onScroll, { passive: true });
+        return () => window.removeEventListener('scroll', onScroll);
+    }, []);
+
+    const handleSave = (id: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSavedIds(toggleSaved(id));
+    };
+
+    const handleShare = (scheme: SchemeResponse, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const text = `📌 ${scheme.name}\n💰 Benefit: ${scheme.benefit_amount || 'See details'}\n🏛️ ${scheme.applying_authority || ''}\n\nJanSahayak AI — jansahayak.ai`;
+        navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+    };
 
     useEffect(() => {
         fetchSchemes();
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SR) {
-            const r = new SR();
+            const r = new SR() as any;
             r.continuous = false; r.interimResults = false; r.lang = langConf.tts;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             r.onresult = (e: any) => { setSearch(e.results[0][0].transcript); setIsListening(false); };
             r.onerror = () => setIsListening(false);
             r.onend = () => setIsListening(false);
@@ -287,25 +351,64 @@ export const SchemeFinder = () => {
                     {loading ? 'Searching...' : `${total} ${t.found}`}
                 </p>
 
+                {/* ── Copied Toast ── */}
+                <AnimatePresence>
+                    {copied && (
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                            className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-sm px-4 py-2 rounded-full shadow-lg">
+                            ✅ Copied to clipboard!
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* ── Back to Top ── */}
+                <AnimatePresence>
+                    {showBackTop && (
+                        <motion.button
+                            initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
+                            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                            className="fixed bottom-24 right-6 z-40 h-12 w-12 rounded-full bg-primary text-white shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors md:bottom-8"
+                        >
+                            <ArrowUp className="h-5 w-5" />
+                        </motion.button>
+                    )}
+                </AnimatePresence>
+
                 {/* ── Cards Grid ── */}
                 {loading ? (
-                    <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {Array.from({ length: 6 }).map((_, i) => <SchemeSkeletonCard key={i} />)}
+                    </div>
                 ) : schemes.length === 0 ? (
-                    <div className="text-center py-16">
+                    <div className="text-center py-20">
                         <FileText className="h-16 w-16 text-gray-200 mx-auto mb-4" />
-                        <p className="text-gray-500 font-medium">{t.noSchemes}</p>
-                        <p className="text-xs text-gray-400 mt-1">{t.tryDiff}</p>
+                        <p className="text-gray-700 font-semibold text-lg">{t.noSchemes}</p>
+                        <p className="text-sm text-gray-400 mt-1 mb-6">{t.tryDiff}</p>
+                        {(search || category) && (
+                            <button
+                                onClick={() => { setSearch(''); setCategory(''); fetchSchemes({ category: '', search: '' }); }}
+                                className="px-6 py-2 rounded-full bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                            >Clear Filters &amp; Show All</button>
+                        )}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {schemes.map((scheme, i) => {
                             const desc = getTranslated(scheme, 'description', lang);
                             const catColor = CATEGORY_COLORS[scheme.category] || 'bg-gray-100 text-gray-700';
+                            const daysLeft = daysUntilDeadline(scheme.deadline);
+                            const isSaved = savedIds.includes(scheme.id);
                             return (
                                 <motion.div key={scheme.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                                    <Card className="h-full hover:shadow-md transition-all hover:border-primary/30 bg-white border-gray-100">
+                                    <Card className="h-full hover:shadow-md transition-all hover:border-primary/30 bg-white border-gray-100 relative overflow-visible">
+                                        {/* Deadline badge */}
+                                        {daysLeft !== null && (
+                                            <span className="absolute -top-2 -right-2 z-10 bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+                                                {daysLeft === 0 ? 'Today!' : `${daysLeft}d left`}
+                                            </span>
+                                        )}
                                         <CardContent className="p-5 flex flex-col h-full gap-3">
-                                            {/* Category + State badge */}
+                                            {/* Category + badges row */}
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${catColor}`}>
                                                     {t[CATEGORIES.find(c => c.db === scheme.category)?.key || 'all'] || scheme.category}
@@ -316,12 +419,21 @@ export const SchemeFinder = () => {
                                                 {scheme.match_percentage && (
                                                     <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-semibold">{scheme.match_percentage}%</span>
                                                 )}
+                                                {/* Save + Share icons */}
+                                                <div className="ml-auto flex gap-1">
+                                                    <button onClick={e => handleSave(scheme.id, e)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Save scheme">
+                                                        {isSaved ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <Bookmark className="h-4 w-4 text-gray-300 hover:text-primary" />}
+                                                    </button>
+                                                    <button onClick={e => handleShare(scheme, e)} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors" title="Share">
+                                                        <Share2 className="h-4 w-4 text-gray-300 hover:text-primary" />
+                                                    </button>
+                                                </div>
                                             </div>
 
                                             {/* Name */}
                                             <h3 className="font-bold text-gray-900 text-sm leading-snug">{scheme.name}</h3>
 
-                                            {/* Benefit — large bold */}
+                                            {/* Benefit */}
                                             {scheme.benefit_amount && (
                                                 <div className="flex items-start gap-1.5">
                                                     <IndianRupee className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
@@ -473,31 +585,52 @@ export const SchemeFinder = () => {
                             </div>
 
                             {/* Sticky Bottom Bar */}
-                            <div className="sticky bottom-0 bg-white border-t border-gray-100 px-6 py-4 flex gap-3 rounded-b-3xl">
-                                {(() => {
-                                    const url = extractApplyUrl(selectedScheme.applying_authority);
-                                    return url ? (
-                                        <a href={url} target="_blank" rel="noopener noreferrer" className="flex-1">
-                                            <Button className="w-full h-11 text-sm">
+                            <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3 rounded-b-3xl">
+                                <div className="flex gap-2 mb-2">
+                                    {/* Save */}
+                                    <button
+                                        onClick={e => handleSave(selectedScheme.id, e)}
+                                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${savedIds.includes(selectedScheme.id)
+                                            ? 'bg-primary/10 border-primary/30 text-primary'
+                                            : 'border-gray-200 text-gray-600 hover:border-primary hover:text-primary'
+                                            }`}
+                                    >
+                                        {savedIds.includes(selectedScheme.id)
+                                            ? <><BookmarkCheck className="h-3.5 w-3.5" />Saved</>
+                                            : <><Bookmark className="h-3.5 w-3.5" />Save</>}
+                                    </button>
+                                    {/* Share */}
+                                    <button
+                                        onClick={e => handleShare(selectedScheme, e)}
+                                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600 hover:border-primary hover:text-primary transition-all"
+                                    >
+                                        <Share2 className="h-3.5 w-3.5" />Share
+                                    </button>
+                                </div>
+                                <div className="flex gap-2">
+                                    {(() => {
+                                        const url = extractApplyUrl(selectedScheme.applying_authority);
+                                        return url ? (
+                                            <a href={url} target="_blank" rel="noopener noreferrer" className="flex-1">
+                                                <Button className="w-full h-11 text-sm">
+                                                    <ExternalLink className="h-4 w-4 mr-2" />{t.applyNow}
+                                                </Button>
+                                            </a>
+                                        ) : (
+                                            <Button className="flex-1 h-11 text-sm" disabled>
                                                 <ExternalLink className="h-4 w-4 mr-2" />{t.applyNow}
                                             </Button>
-                                        </a>
-                                    ) : (
-                                        <Button className="flex-1 h-11 text-sm" disabled>
-                                            <ExternalLink className="h-4 w-4 mr-2" />{t.applyNow}
+                                        );
+                                    })()}
+                                    <a
+                                        href={`https://wa.me/911800115526?text=${encodeURIComponent(`Help me with: ${selectedScheme.name}`)}`}
+                                        target="_blank" rel="noopener noreferrer" className="flex-1"
+                                    >
+                                        <Button variant="outline" className="w-full h-11 text-sm border-green-200 text-green-700 hover:bg-green-50">
+                                            <MessageCircle className="h-4 w-4 mr-2" />{t.whatsapp}
                                         </Button>
-                                    );
-                                })()}
-                                <a
-                                    href={`https://wa.me/911800115526?text=${encodeURIComponent(`Help me with: ${selectedScheme.name}`)}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex-1"
-                                >
-                                    <Button variant="outline" className="w-full h-11 text-sm border-green-200 text-green-700 hover:bg-green-50">
-                                        <MessageCircle className="h-4 w-4 mr-2" />{t.whatsapp}
-                                    </Button>
-                                </a>
+                                    </a>
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>

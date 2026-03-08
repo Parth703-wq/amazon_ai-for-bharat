@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
     Users, MessageSquare, FileCheck, AlertTriangle,
-    TrendingUp, IndianRupee, RefreshCw, Loader2,
-    CheckCircle, Clock, Shield
+    IndianRupee, RefreshCw, Loader2, CheckCircle
 } from 'lucide-react';
+
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-    PieChart, Pie, Cell, ResponsiveContainer, Legend
+    PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts';
+
 import { adminApi, type AdminStats } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +25,8 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export const AdminDashboard = () => {
-    const { user, isLoggedIn } = useAuthStore();
+    const { isLoggedIn } = useAuthStore();
+
     const navigate = useNavigate();
     const [stats, setStats] = useState<AdminStats | null>(null);
     const [loading, setLoading] = useState(true);

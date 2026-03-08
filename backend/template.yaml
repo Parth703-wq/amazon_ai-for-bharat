@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  JanSahayak AI — FastAPI backend deployed on AWS Lambda + API Gateway.
+  Supports Amazon Bedrock (Claude 3 Sonnet), DynamoDB chat sessions, S3 documents.
+
+Globals:
+  Function:
+    Timeout: 30          # seconds (max Lambda allowed)
+    MemorySize: 512      # MB
+    Runtime: python3.11
+    Environment:
+      Variables:
+        # ── Database ──────────────────────────────────────
+        DB_HOST: !Sub '{{resolve:ssm:/jansahayak/DB_HOST}}'
+        DB_PORT: '3306'
+        DB_NAME: jansahayak
+        DB_USER: !Sub '{{resolve:ssm:/jansahayak/DB_USER}}'
+        DB_PASSWORD: !Sub '{{resolve:ssm:/jansahayak/DB_PASSWORD}}'
+        # ── AWS Credentials ───────────────────────────────
+        AWS_ACCESS_KEY_ID: !Sub '{{resolve:ssm:/jansahayak/AWS_ACCESS_KEY_ID}}'
+        AWS_SECRET_ACCESS_KEY: !Sub '{{resolve:ssm:/jansahayak/AWS_SECRET_ACCESS_KEY}}'
+        AWS_REGION: us-east-1
+        AWS_S3_BUCKET: jansahayak-documents
+        AWS_S3_BUCKET_NAME: jansahayak-documents
+        AWS_BEDROCK_MODEL_ID: anthropic.claude-3-sonnet-20240229-v1:0
+        DYNAMODB_CHAT_TABLE: jansahayak-chat-sessions
+        USE_BEDROCK: 'true'
+        AI_PROVIDER: bedrock
+        # ── Gemini fallback ───────────────────────────────
+        GEMINI_API_KEY: !Sub '{{resolve:ssm:/jansahayak/GEMINI_API_KEY}}'
+        # ── App ───────────────────────────────────────────
+        APP_NAME: JanSahayak AI
+        APP_VERSION: 1.0.0
+        DEBUG: 'false'
+        ENVIRONMENT: production
+        SECRET_KEY: !Sub '{{resolve:ssm:/jansahayak/SECRET_KEY}}'
+        CORS_ORIGINS: 'https://YOUR_AMPLIFY_URL,http://localhost:5173'
+
+Resources:
+
+  # ── API Gateway ──────────────────────────────────────────────────────────────
+  JanSahayakApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: JanSahayakAPI
+      StageName: prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+      Description: "API Gateway for JanSahayak AI backend"
+
+  # ── Lambda Function ──────────────────────────────────────────────────────────
+  JanSahayakFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: jansahayak-api
+      Description: "JanSahayak AI FastAPI backend (Mangum adapter)"
+      # Handler points to the Mangum adapter in main.py
+      Handler: main.handler
+      CodeUri: ./
+      Events:
+        # Catch all routes and methods — API Gateway proxies to Lambda
+        CatchAll:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JanSahayakApi
+            Path: /{proxy+}
+            Method: ANY
+        Root:
+          Type: Api
+          Properties:
+            RestApiId: !Ref JanSahayakApi
+            Path: /
+            Method: ANY
+      Policies:
+        # Allow Lambda to call Bedrock
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
+        # Allow Lambda to read/write DynamoDB
+        - DynamoDBCrudPolicy:
+            TableName: jansahayak-chat-sessions
+        # Allow Lambda to read/write S3
+        - S3CrudPolicy:
+            BucketName: jansahayak-documents
+        # Allow Lambda to use Polly
+        - Statement:
+            - Effect: Allow
+              Action:
+                - polly:SynthesizeSpeech
+              Resource: '*'
+        # Allow Lambda to use Textract (OCR)
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:DetectDocumentText
+                - textract:AnalyzeDocument
+              Resource: '*'
+
+  # ── DynamoDB Table for Chat Sessions ─────────────────────────────────────────
+  ChatSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: jansahayak-chat-sessions
+      BillingMode: PAY_PER_REQUEST   # serverless pricing
+      AttributeDefinitions:
+        - AttributeName: session_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: session_id
+          KeyType: HASH   # Partition key
+        - AttributeName: timestamp
+          KeyType: RANGE  # Sort key
+      TimeToLiveSpecification:
+        AttributeName: expires_at   # 30-day TTL
+        Enabled: true
+
+Outputs:
+  ApiGatewayUrl:
+    Description: "API Gateway endpoint URL — paste into VITE_API_URL in frontend .env.production"
+    Value: !Sub 'https://${JanSahayakApi}.execute-api.${AWS::Region}.amazonaws.com/prod/api/v1'
+
+  LambdaFunctionArn:
+    Description: "ARN of the deployed Lambda function"
+    Value: !GetAtt JanSahayakFunction.Arn

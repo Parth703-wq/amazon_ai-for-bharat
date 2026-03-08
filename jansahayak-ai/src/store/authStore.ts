@@ -38,7 +38,7 @@ export const useAuthStore = create<AuthState>()(
                 const res = await authApi.login(phone, password);
                 authApi.saveToken(res.access_token);
                 set({ token: res.access_token, isLoggedIn: true });
-                const me = await authApi.getMe() as User;
+                const me = await authApi.getMe() as unknown as User;
                 set({ user: me });
             },
 
@@ -46,7 +46,7 @@ export const useAuthStore = create<AuthState>()(
                 const res = await authApi.register(data);
                 authApi.saveToken(res.access_token);
                 set({ token: res.access_token, isLoggedIn: true });
-                const me = await authApi.getMe() as User;
+                const me = await authApi.getMe() as unknown as User;
                 set({ user: me });
             },
 
@@ -57,7 +57,7 @@ export const useAuthStore = create<AuthState>()(
 
             refreshUser: async () => {
                 try {
-                    const me = await authApi.getMe() as User;
+                    const me = await authApi.getMe() as unknown as User;
                     set({ user: me });
                 } catch {
                     get().logout();
@@ -71,7 +71,8 @@ export const useAuthStore = create<AuthState>()(
         }),
         {
             name: 'jansahayak-auth',
-            partializing: (state) => ({ token: state.token, user: state.user, isLoggedIn: state.isLoggedIn }),
-        } as any
+            partialize: (state: AuthState) => ({ token: state.token, user: state.user, isLoggedIn: state.isLoggedIn }),
+        }
+
     )
 );

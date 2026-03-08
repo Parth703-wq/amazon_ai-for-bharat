@@ -68,7 +68,7 @@ function FlyTo({ lat, lng }: { lat: number; lng: number }) {
     return null;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8001/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 export const OfficeLocator = () => {
     const [offices, setOffices] = useState<Office[]>([]);
@@ -145,7 +145,7 @@ export const OfficeLocator = () => {
                             <LocateFixed className="h-4 w-4 mr-2" /> Near Me
                         </Button>
                         <Button
-                            variant={is2G ? 'default' : 'outline'} size="sm"
+                            variant={is2G ? 'primary' : 'outline'} size="sm"
                             onClick={() => setIs2G(!is2G)} className="shrink-0"
                         >
                             <Signal className="h-4 w-4 mr-2" />

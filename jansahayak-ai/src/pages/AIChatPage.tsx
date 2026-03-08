@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Send, Bot, User, Loader2, Volume2, RefreshCw } from 'lucide-react';
-import { chatApi, type ChatMessage } from '@/lib/api';
+import { Mic, MicOff, Send, Bot, User, Volume2, VolumeX, Square, Loader2 } from 'lucide-react';
+
+import { chatApi, pollyApi, type ChatMessage } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -10,8 +11,10 @@ import { v4 as uuidv4 } from 'uuid';
 // Web Speech API types
 declare global {
     interface Window {
+        /* eslint-disable @typescript-eslint/no-explicit-any */
         SpeechRecognition: any;
         webkitSpeechRecognition: any;
+        /* eslint-enable @typescript-eslint/no-explicit-any */
     }
 }
 
@@ -31,16 +34,151 @@ const QUICK_QUESTIONS = [
     'मुझे कौन सी योजना मिलती है?',
 ];
 
+// ─── Polly speaker hook (Feature 1) ─────────────────────────────────────────
+function usePollyPlayer() {
+    const [playingId, setPlayingId] = useState<number | null>(null);
+    const [loadingId, setLoadingId] = useState<number | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
+    const stop = () => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.src = '';
+        }
+        setPlayingId(null);
+    };
+
+    const play = async (msgId: number, text: string, lang: string) => {
+        // Toggle off if same message is already playing
+        if (playingId === msgId) { stop(); return; }
+        stop();
+
+        setLoadingId(msgId);
+        try {
+            const res = await pollyApi.speak(text, lang);
+
+            if (res.available && res.audio_base64) {
+                // Decode base64 → Blob → Object URL → play
+                const binary = atob(res.audio_base64);
+                const bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'audio/mpeg' });
+                const url = URL.createObjectURL(blob);
+
+                const audio = new Audio(url);
+                audioRef.current = audio;
+                audio.onended = () => { setPlayingId(null); URL.revokeObjectURL(url); };
+                audio.onerror = () => { setPlayingId(null); };
+                await audio.play();
+                setPlayingId(msgId);
+            } else {
+                // Polly not configured → fallback to browser SpeechSynthesis
+                const u = new SpeechSynthesisUtterance(text);
+                const selectedLang = LANGUAGES.find(l => l.code === lang);
+                u.lang = selectedLang?.speechCode || 'hi-IN';
+                u.onend = () => setPlayingId(null);
+                u.onerror = () => setPlayingId(null);
+                window.speechSynthesis.speak(u);
+                setPlayingId(msgId);
+            }
+        } catch {
+            // Silently fall back to browser TTS
+            const u = new SpeechSynthesisUtterance(text);
+            const selectedLang = LANGUAGES.find(l => l.code === lang);
+            u.lang = selectedLang?.speechCode || 'hi-IN';
+            u.onend = () => setPlayingId(null);
+            window.speechSynthesis.speak(u);
+            setPlayingId(msgId);
+        } finally {
+            setLoadingId(null);
+        }
+    };
+
+    // Clean up on unmount
+    useEffect(() => () => stop(), []);
+
+    return { playingId, loadingId, play, stop };
+}
+
+// ─── Speaker button component ────────────────────────────────────────────────
+interface SpeakerButtonProps {
+    msgId: number;
+    text: string;
+    lang: string;
+    playingId: number | null;
+    loadingId: number | null;
+    onPlay: (id: number, text: string, lang: string) => void;
+    onStop: () => void;
+}
+
+const SpeakerButton: React.FC<SpeakerButtonProps> = ({
+    msgId, text, lang, playingId, loadingId, onPlay, onStop
+}) => {
+    const isLoading = loadingId === msgId;
+    const isPlaying = playingId === msgId;
+
+    return (
+        <button
+            onClick={() => isPlaying ? onStop() : onPlay(msgId, text, lang)}
+            title={isPlaying ? 'Stop audio' : 'Listen with Amazon Polly'}
+            className={`mt-2 flex items-center gap-1.5 text-xs rounded-full px-2.5 py-1 transition-all
+                ${isPlaying
+                    ? 'bg-primary/15 text-primary font-medium'
+                    : 'text-gray-400 hover:text-primary hover:bg-primary/10'
+                }`}
+        >
+            {isLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isPlaying ? (
+                <>
+                    {/* Pulsing wave animation while playing */}
+                    <span className="flex items-center gap-0.5">
+                        {[0, 150, 300].map(delay => (
+                            <span
+                                key={delay}
+                                className="inline-block w-0.5 bg-primary rounded-full animate-bounce"
+                                style={{ height: '10px', animationDelay: `${delay}ms` }}
+                            />
+                        ))}
+                    </span>
+                    <Square className="h-3 w-3 fill-primary" />
+                    Stop
+                </>
+            ) : (
+                <>
+                    <Volume2 className="h-3.5 w-3.5" />
+                    Listen
+                </>
+            )}
+        </button>
+    );
+};
+
+// ─── Main Page ───────────────────────────────────────────────────────────────
 export const AIChatPage = () => {
     const { user } = useAuthStore();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    const [sessionId] = useState(() => uuidv4());
+
+    // Session ID persisted in localStorage (for DynamoDB history)
+    const [sessionId] = useState<string>(() => {
+        const SESS_KEY = 'jansahayak_chat_session_id';
+        const existing = localStorage.getItem(SESS_KEY);
+        if (existing) return existing;
+        const newId = uuidv4();
+        localStorage.setItem(SESS_KEY, newId);
+        return newId;
+    });
+
     const [lang, setLang] = useState('en');
     const [isListening, setIsListening] = useState(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [recognition, setRecognition] = useState<any>(null);
-    const bottomRef = React.useRef<HTMLDivElement>(null);
+    const bottomRef = useRef<HTMLDivElement>(null);
+
+    // Polly player
+    const { playingId, loadingId, play: pollyPlay, stop: pollyStop } = usePollyPlayer();
 
     useEffect(() => {
         // Welcome message
@@ -48,19 +186,19 @@ export const AIChatPage = () => {
             id: 0,
             role: 'assistant',
             content: user
-                ? `Namaste ${user.full_name}! I am JanSahayak AI. Ask me about any government scheme, eligibility, or how to apply. I can help in Hindi, English, and 20+ Indian languages.`
-                : `Namaste! I am JanSahayak AI. Ask me about any government scheme or welfare program. Please sign in for personalized recommendations.`
+                ? `Namaste ${user.full_name}! I am JanSahayak AI. Ask me about any government scheme, eligibility, or how to apply. I can help in Hindi, English, and regional Indian languages.`
+                : `Namaste! I am JanSahayak AI. Ask me about any government scheme or welfare program. Please sign in for personalized recommendations.`,
         }]);
 
-        // Init Web Speech API
+        // Init Web Speech API for voice input
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SR) {
             const r = new SR();
             r.continuous = false;
             r.interimResults = false;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             r.onresult = (e: any) => {
-                const transcript = e.results[0][0].transcript;
-                setInput(transcript);
+                setInput(e.results[0][0].transcript);
                 setIsListening(false);
             };
             r.onerror = () => setIsListening(false);
@@ -95,27 +233,27 @@ export const AIChatPage = () => {
             const aiMsg: ChatMessage = { id: Date.now() + 1, role: 'assistant', content: res.response };
             setMessages(prev => [...prev, aiMsg]);
         } catch {
-            setMessages(prev => [...prev, { id: Date.now() + 1, role: 'assistant', content: 'Sorry, I could not connect. Please try again.' }]);
+            setMessages(prev => [...prev, {
+                id: Date.now() + 1,
+                role: 'assistant',
+                content: 'Sorry, I could not connect. Please try again.',
+            }]);
         } finally {
             setLoading(false);
         }
     };
 
-    const speak = (text: string) => {
-        const u = new SpeechSynthesisUtterance(text);
-        const selectedLang = LANGUAGES.find(l => l.code === lang);
-        u.lang = selectedLang?.speechCode || 'hi-IN';
-        window.speechSynthesis.speak(u);
-    };
-
     return (
         <div className="min-h-screen bg-gray-50 pt-20 pb-6">
             <div className="container mx-auto px-4 max-w-4xl h-[calc(100vh-120px)] flex flex-col">
+
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">AI Assistant</h1>
-                        <p className="text-sm text-gray-500">Powered by Gemini AI · Amazon Bedrock ready</p>
+                        <p className="text-sm text-gray-500">
+                            Powered by Amazon Bedrock · Polly voice output
+                        </p>
                     </div>
                     <select
                         className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium bg-white"
@@ -142,17 +280,29 @@ export const AIChatPage = () => {
                                             <Bot className="h-5 w-5" />
                                         </div>
                                     )}
+
                                     <div className={`max-w-[75%] rounded-2xl px-4 py-3 ${msg.role === 'user'
                                             ? 'bg-primary text-white rounded-tr-sm'
                                             : 'bg-white border border-gray-100 text-gray-800 rounded-tl-sm shadow-sm'
                                         }`}>
-                                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                                            {msg.content}
+                                        </p>
+
+                                        {/* ── Feature 1: Polly speaker button (assistant only) ── */}
                                         {msg.role === 'assistant' && (
-                                            <button onClick={() => speak(msg.content)} className="mt-2 text-xs text-gray-400 hover:text-primary flex items-center gap-1">
-                                                <Volume2 className="h-3 w-3" /> Listen
-                                            </button>
+                                            <SpeakerButton
+                                                msgId={msg.id}
+                                                text={msg.content}
+                                                lang={lang}
+                                                playingId={playingId}
+                                                loadingId={loadingId}
+                                                onPlay={pollyPlay}
+                                                onStop={pollyStop}
+                                            />
                                         )}
                                     </div>
+
                                     {msg.role === 'user' && (
                                         <div className="h-9 w-9 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
                                             <User className="h-5 w-5 text-gray-600" />
@@ -161,6 +311,8 @@ export const AIChatPage = () => {
                                 </motion.div>
                             ))}
                         </AnimatePresence>
+
+                        {/* Typing indicator */}
                         {loading && (
                             <div className="flex gap-3">
                                 <div className="h-9 w-9 rounded-full bg-primary flex items-center justify-center text-white shrink-0">
@@ -213,7 +365,11 @@ export const AIChatPage = () => {
                                 onChange={e => setInput(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                             />
-                            <Button onClick={() => sendMessage()} disabled={!input.trim() || loading} className="h-12 px-5 rounded-xl shrink-0">
+                            <Button
+                                onClick={() => sendMessage()}
+                                disabled={!input.trim() || loading}
+                                className="h-12 px-5 rounded-xl shrink-0"
+                            >
                                 <Send className="h-5 w-5" />
                             </Button>
                         </div>

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Phone, Lock, User, MapPin, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { Phone, Lock, User, MapPin, Eye, EyeOff } from 'lucide-react';
+
 import { useAuthStore } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
 
@@ -160,18 +161,11 @@ export const AuthPage = () => {
                             {mode === 'login' ? 'Sign In' : 'Create Account'}
                         </Button>
 
-                        <div className="flex items-center justify-center gap-2 text-xs text-gray-400 pt-2">
-                            <ShieldCheck className="h-4 w-4 text-success" />
-                            Secured with JWT · Data protected under DPDP Act 2023
-                        </div>
+
                     </form>
                 </div>
 
-                {/* Demo credentials */}
-                <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm">
-                    <p className="font-semibold text-amber-800 mb-1">Demo Credentials</p>
-                    <p className="text-amber-700">Phone: <span className="font-mono">9999999999</span> · Password: <span className="font-mono">admin@123</span></p>
-                </div>
+
             </motion.div>
         </div>
     );

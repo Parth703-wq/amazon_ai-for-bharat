@@ -14,6 +14,11 @@ const NAV_LINKS = [
     { label: 'Grievance', path: '/grievance' },
 ];
 
+// Public links (visible to everyone including logged out users)
+const PUBLIC_NAV_LINKS = [
+    { label: '☁️ AWS Architecture', path: '/architecture' },
+];
+
 export const Navbar = () => {
     const [scrolled, setScrolled] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -49,13 +54,26 @@ export const Navbar = () => {
 
                     {/* Desktop Nav */}
                     <nav className="hidden md:flex items-center gap-1">
-                        {NAV_LINKS.map(link => (
+                        {isLoggedIn && NAV_LINKS.map(link => (
                             <Link
                                 key={link.path}
                                 to={link.path}
                                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === link.path
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-gray-600 hover:text-primary hover:bg-gray-50'
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'text-gray-600 hover:text-primary hover:bg-gray-50'
+                                    }`}
+                            >
+                                {link.label}
+                            </Link>
+                        ))}
+                        {/* AWS Architecture — always visible */}
+                        {PUBLIC_NAV_LINKS.map(link => (
+                            <Link
+                                key={link.path}
+                                to={link.path}
+                                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${location.pathname === link.path
+                                    ? 'bg-orange-100 text-orange-700'
+                                    : 'text-orange-600 hover:text-orange-700 hover:bg-orange-50'
                                     }`}
                             >
                                 {link.label}
@@ -121,7 +139,7 @@ export const Navbar = () => {
                         animate={{ opacity: 1, y: 0 }}
                         className="md:hidden border-t border-gray-100 py-4 space-y-1"
                     >
-                        {NAV_LINKS.map(link => (
+                        {isLoggedIn && NAV_LINKS.map(link => (
                             <Link
                                 key={link.path}
                                 to={link.path}
@@ -133,6 +151,7 @@ export const Navbar = () => {
                         {user?.role === 'admin' && (
                             <Link to="/admin" className="block px-4 py-3 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Admin Dashboard</Link>
                         )}
+                        <Link to="/architecture" className="block px-4 py-3 rounded-xl text-sm font-medium text-orange-600 hover:bg-orange-50">☁️ AWS Architecture</Link>
                     </motion.div>
                 )}
             </div>

@@ -66,7 +66,7 @@ export const authApi = {
 
 // ─── Schemes API ────────────────────────────────────────────────────────
 export const schemesApi = {
-    getSchemes: (params?: { category?: string; state?: string; search?: string; max_income?: number }) => {
+    getSchemes: (params?: { category?: string; state?: string; search?: string; max_income?: number; limit?: number }) => {
         const qs = new URLSearchParams(params as Record<string, string>).toString();
         return request<{ total: number; schemes: SchemeResponse[] }>(`/schemes/?${qs}`);
     },
@@ -97,12 +97,21 @@ export const documentsApi = {
         fd.append('file', file);
         fd.append('document_type', documentType);
         fd.append('language', language);
-        return requestMultipart<{ document_id: number; file_name: string; analysis: DocumentAnalysis }>('/documents/upload', fd);
+        return requestMultipart<DocumentUploadResult>('/documents/upload', fd);
     },
 
     getMyDocuments: () => request<UserDocument[]>('/documents/'),
 
     deleteDocument: (id: number) => request(`/documents/${id}`, { method: 'DELETE' }),
+};
+
+// ─── Polly API (Amazon TTS) ──────────────────────────────────────────────
+export const pollyApi = {
+    speak: (text: string, language = 'hi') =>
+        request<{ audio_base64: string | null; language: string; available: boolean }>('/polly/speak', {
+            method: 'POST',
+            body: JSON.stringify({ text, language }),
+        }),
 };
 
 // ─── Grievances API ─────────────────────────────────────────────────────
@@ -188,6 +197,20 @@ export interface ChatMessage {
     role: 'user' | 'assistant';
     content: string;
     created_at?: string;
+}
+
+export interface DocumentUploadResult {
+    document_id: number;
+    file_name: string;
+    storage: 'local' | 's3';
+    ai_provider: 'bedrock' | 'gemini';
+    // Feature 2: Textract OCR fields
+    textract_extracted_text: string;
+    textract_lines: string[];
+    textract_confidence: number;
+    textract_available: boolean;
+    // Existing AI analysis
+    analysis: DocumentAnalysis;
 }
 
 export interface DocumentAnalysis {
